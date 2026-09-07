@@ -94,6 +94,31 @@ function measure(label, docs) {
   const sd = Math.sqrt(lens.reduce((a, b) => a + (b - mean) ** 2, 0) / (n || 1));
   const commas = allSent.reduce((a, s) => a + (s.match(/,/g) || []).length, 0);
 
+  // ── ★★ 종결어미 연속 (2026-09-03 신설) ─────────────────────────────
+  // 근거: @conanssam 스레드(2026-09-03)의 6단 「AI 글 냄새 제거 게이트」 **답글**.
+  //   그 글이 6단계를 다 설명하고도 독자 세 명에게 AI 글로 지목됐고, 지적된 축이
+  //   **어미 패턴의 균질함**이었다 — *"대부분 어미에서 티가나죠. 안씁니다, 죽습니다,
+  //   이겁니다, 잘안됩니다."* ★ **저쪽 6단계에 그 항목이 없다.**
+  // ⛔ 금지어로 만들지 않는다 — 「~습니다」를 막으면 no-ai-tell 4절의
+  //   *"존댓말과 ~해요를 섞는다"* 가 무너진다. **연속만 센다.**
+  // ⛔ 임계를 박지 않는다 — 우리 기준선이 없다. 이 파일 규약대로 **재고 나서 정한다.**
+  const endingOf = (s) => {
+    const t = s.replace(/[)\]"'”’\s.!?…]+$/g, '');
+    const m = t.match(/(습니다|합니다|입니다|됩니다|니다|어요|아요|해요|예요|이에요|거든요|네요|죠|다)$/);
+    return m ? m[1] : '';
+  };
+  const endings = allSent.map(endingOf);
+  const endFreq = {};
+  let runMax = 0, run3 = 0, cur = 0, prev = '';
+  for (const e of endings) {
+    if (e) endFreq[e] = (endFreq[e] || 0) + 1;
+    if (e && e === prev) { cur += 1; } else { cur = e ? 1 : 0; }
+    if (cur >= 3) run3 += 1;           // 3연속 이상이 발생한 지점 수
+    if (cur > runMax) runMax = cur;
+    prev = e;
+  }
+  const topEnding = Object.entries(endFreq).sort((a, b) => b[1] - a[1])[0] ?? ['', 0];
+
   return {
     label, docs: docs.length, sentences: n, chars,
     comma_inclusion_rate: n ? (withComma / n) * 100 : 0,      // C-12 정의
@@ -101,6 +126,9 @@ function measure(label, docs) {
     ending_comma_rate: connTotal ? (connComma / connTotal) * 100 : 0,  // C-11 — ★ 분모 = 연결어미 총수(우리 정의)
     connective_total: connTotal, connective_comma: connComma,
     sent_len_mean: mean, sent_len_sd: sd,                     // E-1 (저쪽 임계 stdev 8)
+    ending_run_max: runMax,                                   // 같은 종결어미 최장 연속
+    ending_run3: run3,                                        // 3연속 이상 발생 지점 수
+    ending_top: topEnding[0], ending_top_share: n ? (topEnding[1] / n) * 100 : 0,
     lex, trans,
   };
 }
@@ -154,6 +182,7 @@ for (const [label, docs] of Object.entries(surfaces)) {
   console.log(`   쉼표 포함 문장률   ${fmt(m.comma_inclusion_rate)}%      문장당 쉼표 ${fmt(m.comma_usage_rate, 2)}개`);
   console.log(`   연결어미 뒤 쉼표   ${fmt(m.ending_comma_rate)}%   (${m.connective_comma}/${m.connective_total})  ← 저쪽 단일 최강 지표`);
   console.log(`   문장 길이(어절)    평균 ${fmt(m.sent_len_mean)} · 표준편차 ${fmt(m.sent_len_sd)}   ← 저쪽 임계 sd 8 미만=균일`);
+  console.log(`   종결어미 연속      최장 ${m.ending_run_max} · 3연속 지점 ${m.ending_run3} · 최다 「${m.ending_top || '-'}」 ${fmt(m.ending_top_share)}%   ← 2026-09-03 신설, 임계 없음`);
   console.log(`   결산 피벗 4종      ${m.lex.pivot}회      안전 균형 5종 ${m.lex.balance}회`);
   const hits = Object.entries(m.trans).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   console.log(`   번역투(우리 목록 밖) ${hits.length ? hits.map(([k, v]) => `${k} ${v}`).join(' · ') : '0건'}`);

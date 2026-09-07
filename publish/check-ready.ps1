@@ -287,7 +287,7 @@ $brHas  = Test-Path $brFile
 if (-not $brDue) {
   Chk '오늘자 브리핑' $true '07시 전이라 판정 보류'
 } else {
-  Chk '오늘자 브리핑' $brHas $(if ($brHas) { '있음  ' + (Get-Item $brFile).LastWriteTime.ToString('HH:mm') } else { '없음 -- 앱 로그인과 예약작업을 볼 것' })
+  Chk '오늘자 브리핑' $brHas $(if ($brHas) { '있음  ' + (Get-Item $brFile).LastWriteTime.ToString('HH:mm') } else { '없음 -- 10번(스케줄 스킬 배포) . 8번(앱 로그인) . 예약작업 순으로 볼 것' })
 }
 
 # 8. Claude 앱 인증이 살아 있는가 (원인 기반 조기 경보)
@@ -335,6 +335,29 @@ if (-not $profOk) {
   Chk 'Claude 자동시작' $true '보류 -- 스케줄러 실행(HKCU\Software\Classes 매핑 다름)'
 } else {
   Chk 'Claude 자동시작' $stOk $(if ($stOk) { "State=$stVal (켜짐)" } elseif ($null -eq $stVal) { '키 없음 -- 앱 재설치 또는 패키지명 변경 확인' } else { "State=$stVal (꺼짐) -- 재부팅되면 브리핑이 멈춘다" })
+}
+
+# 10. 스케줄 작업 스킬이 러너가 읽는 자리에 있는가 (2026-09-07 추가)
+#     9/05.9/06.9/07 브리핑 3연속 결번. 원인은 인증도 전원도 아니었다.
+#     9/04 에 SKILL.md 를 리포로 옮기며 ~/.claude 쪽을 디렉터리 정션으로 걸었는데
+#     러너가 정션 너머를 못 읽는다. 발사는 되고(lastRunAt 갱신) 세션이 안 떴다.
+#     단일 변수 실측: .OLD 와 리포 실물의 MD5 가 같았다. 바뀐 건 폴더 종류 하나뿐.
+#     확증: 정션을 실제 폴더로 바꾸자 list_scheduled_tasks 의 description 이 채워졌다.
+#     ★ 7번(브리핑 없음)은 결과를 잡지만 사흘 내내 원인을 못 가리켰다.
+#       그 힌트가 "앱 로그인과 예약작업을 볼 것" 이라 latch 로 오진하게 만들었다.
+#       이 검사는 원인 쪽이다 -- 폴더 종류와 사본 드리프트를 같이 본다.
+$tlScript = Join-Path $PSScriptRoot '..\vault\check-task-link.mjs'
+if (-not (Test-Path $tlScript)) {
+  # ⚠️ 2026-09-08: 이 검사기는 우리 볼트 사정(예약 작업 이름·~/.claude 경로)이 든 파일이라
+  #   공개 자료로 내보내지 않는다. 받는 쪽에는 없으므로 여기서 건너뛴다.
+  #   ★ 219행 check-public-authors 와 같은 패턴 -- 없는 검사기를 「실패」로 찍지 않는다.
+  Chk '스케줄 스킬 배포' $true '검사기 없음 -- 건너뜀'
+} else {
+  $tlOut = & node $tlScript 2>&1
+  $tlOk  = ($LASTEXITCODE -eq 0)
+  $tlWhy = if ($tlOk) { '실제 폴더 + 리포와 동일' } else { ($tlOut | Select-String -Pattern '⛔' | Select-Object -First 1).ToString().Trim() }
+  Chk '스케줄 스킬 배포' $tlOk $tlWhy
+  if (-not $tlOk) { $tlOut | ForEach-Object { '        ' + $_ } }
 }
 
 ""
