@@ -360,6 +360,32 @@ if (-not (Test-Path $tlScript)) {
   if (-not $tlOk) { $tlOut | ForEach-Object { '        ' + $_ } }
 }
 
+# 11. 티스토리 원고 status 가 블로그와 맞는가 (2026-09-09 추가 - 사용자 지시)
+#     이 필드는 라벨이 아니라 안전장치다. publish-tistory.mjs 가 status: published 면
+#     발행을 거부한다(중복 방지). 그런데 갱신을 사람에게 맡기고 있었다.
+#     2026-09-09 실측: 원고 18편 중 13편이 RSS 와 어긋남.
+#       이미 나간 ep-11.12 = scheduled (중복을 못 막는 값)
+#       아직 안 나간 ep-15~18 = published (발행기가 거부하는 값) -> 9/11 이 막혀 있었다
+#     ★ 발행기 되쓰기를 붙였지만 그것만으로는 부족하다 -- 사람이 티스토리 웹에서 직접
+#       올리면(9/09 16:03 실제로 그랬다) 되쓰기가 안 돈다. 그래서 매일 대조한다.
+#     ⚠️ 이 검사는 네트워크를 탄다. 스크립트 자체가 조회 실패를 통과로 처리한다
+#       (check-blog-url 과 같은 판정: 못 물어본 것과 없는 것은 다르다).
+$bsScript = Join-Path $PSScriptRoot '..\blog\check-blog-status.mjs'
+if (-not (Test-Path $bsScript)) {
+  # ★ 350행 check-task-link 와 같은 패턴 -- 없는 검사기를 실패로 찍지 않는다.
+  Chk '블로그 status 대조' $true '검사기 없음 -- 건너뜀'
+} else {
+  $bsOut = & node $bsScript 2>&1
+  $bsOk  = ($LASTEXITCODE -eq 0)
+  $bsWhy = if ($bsOk) { ($bsOut | Select-String -Pattern '^(✅ 일치|⚠️)' | Select-Object -First 1).ToString().Trim() }
+           else { ($bsOut | Select-String -Pattern '⛔ 어긋난' | Select-Object -First 1).ToString().Trim() }
+  Chk '블로그 status 대조' $bsOk $bsWhy
+  if (-not $bsOk) {
+    $bsOut | ForEach-Object { '        ' + $_ }
+    '        > 고치기: node pipeline/blog/check-blog-status.mjs --fix'
+  }
+}
+
 ""
 "===================== 결과: OK $ok / 이상 $ng ====================="
 if ($ng -eq 0) { "전부 정상. 로그인 상태 그대로 두고 나가면 된다." }
