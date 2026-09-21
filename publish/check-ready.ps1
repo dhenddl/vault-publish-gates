@@ -294,7 +294,55 @@ if (-not $brDue) {
 #    2026-08-15 09:17:08 실제 로그: "Refresh token expired" 뒤 session_stale_relogin 으로 latch.
 #    한 번 걸리면 앱이 재시도를 건너뛰어 사람이 재로그인할 때까지 자가 복구가 안 된다.
 #    기준선은 마지막 로그인 시각이다 -- 그 전 실패는 이미 해소된 것이라 세지 않는다.
-$appLog = Join-Path $env:APPDATA 'Claude\logs\main.log'
+#
+#    ★★★ 2026-09-21 수리 (사용자 지시). 이 검사는 한 달 넘게 눈이 멀어 있었다.
+#    로그 자리가 두 곳인데 %APPDATA% 쪽만 보고 있었고, 그쪽은 2026-08-21 10:41 에
+#    기록이 멈췄다. 실제로 쓰이는 건 %LOCALAPPDATA%\Claude\Logs\main.log 다
+#    (2026-09-21 09:27 까지 기록 중).
+#    ★★★ 그런데 "못 찾아서 건너뛴다"가 아니었다 -- 파일이 있어서 읽기는 읽었다.
+#    거기에 아래 $since(마지막 로그인 이후) 창이 곱해지면
+#    "한 달 전에 멈춘 파일과 최근 창의 교집합 = 항상 공집합" 이 된다.
+#    낡은 파일 안에 패턴이 236 건 있어도 창 밖이라 0 이고, 0 이면 [OK] 다.
+#    화면에는 정상으로 보인다 -- "건너뜀"보다 나쁘다. 건너뜀은 그렇게라도 찍히는데
+#    이건 검사가 돌면서 초록으로 세어진다.
+#    ★ 같은 날 아침 build-post-spec 에서 잡은 것과 같은 모양이다. 거기선
+#    "이미지 n/m" 의 분자와 분모가 같은 원천이라 서로를 가렸고, 여기서는
+#    파일과 시간 창이 서로를 가린다.
+#
+#    고친 자리 셋:
+#      1) 두 경로를 다 보고 "있는 쪽"이 아니라 "마지막 기록이 최신인 쪽"을 읽는다.
+#         ★ "있는 쪽"으로 고치면 둘 다 있으므로 여전히 죽은 파일을 고른다.
+#      2) 프로필이 붙어 있는데도 두 자리 다 없으면 [OK] 로 세지 않는다.
+#         check-blog-url . check-material-drift 와 같은 규약이다.
+#      3) ★★ 읽은 로그의 마지막 기록 시각을 화면에 같이 찍는다.
+#         1)만 하면 자리가 또 옮겨갈 때 같은 데 선다. "무엇을 읽었나"가 보이면
+#         낡은 걸 읽는 순간 사람 눈에 걸린다.
+#    ★★★ 2026-09-21 오후 추가 -- 두 측정이 갈린 이유가 밝혀졌다. MSIX 리디렉션이다.
+#      릴스 세션(VS Code, 패키지 밖)은 %APPDATA%\Claude 가 없다고 봤고
+#      볼트 세션(데스크탑 앱, 패키지 안)은 있다고 봤다.
+#      🔬 같은 파일이다 -- MD5 72A9043F736D087164B612DAA46EF3AB 가
+#         %APPDATA%\Claude\logs\main.log 와
+#         %LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\logs\main.log
+#         양쪽에서 같다(7,504,439 B . 2026-08-21 10:41).
+#      ⇒ %APPDATA%\Claude 는 컨테이너 안에서만 보이는 가상 경로이고 실체가 저기다.
+#
+#    ★★ 그래서 초록이 되는 길이 둘이고 맥락에 따라 갈린다:
+#      - 작업 스케줄러 . 보통 터미널(패키지 밖) : 경로가 안 보여 '건너뜀' 분기 -> $true
+#      - 데스크탑 앱 세션(패키지 안)            : 보이는데 죽은 파일이라 0건 -> [OK]
+#      ⚠️ 매일 08:00 은 작업 스케줄러라 위쪽 길이 정본이다. 아래쪽은 사람이 손으로
+#         돌릴 때 걸린다. 둘 다 초록이라 여태 안 보였다.
+#
+#    ▶ 그래서 후보에 실경로를 직접 넣는다. 어느 맥락에서 돌리든 같은 답이 나온다.
+$appLogPick = @(
+  (Join-Path $env:LOCALAPPDATA 'Claude\Logs\main.log'),
+  (Join-Path $env:LOCALAPPDATA 'Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\logs\main.log'),
+  (Join-Path $env:APPDATA      'Claude\logs\main.log')
+#    ⚠️ 가상 경로와 실경로가 같은 파일이라 후보에 둘 다 잡힐 수 있다. 중복을 안 지운다 --
+#       같은 파일이면 시각도 같아서 어느 쪽이 앞서든 결과가 같고, 어차피 첫 번째만 쓴다.
+#       (FullName 으로 중복을 지우면 문자열이 달라서 안 지워진다. 그 코드를 썼다가 뺐다.)
+) | Where-Object { $_ -and (Test-Path $_) } | Get-Item | Sort-Object LastWriteTime -Descending
+$appLog  = if ($appLogPick) { $appLogPick[0].FullName } else { $null }
+$appSeen = if ($appLogPick) { $appLogPick[0].LastWriteTime.ToString('MM-dd HH:mm') } else { '' }
 $credF  = Join-Path $env:USERPROFILE '.claude\.credentials.json'
 $since  = (Get-Date).AddHours(-24)
 $base   = '최근 24시간'
@@ -302,7 +350,7 @@ if (Test-Path $credF) {
   $loginAt = (Get-Item $credF).LastWriteTime
   if ($loginAt -gt $since) { $since = $loginAt; $base = '마지막 로그인 이후' }
 }
-if (Test-Path $appLog) {
+if ($appLog) {
   $bad = 0
   foreach ($ln in (Get-Content $appLog -Tail 20000 -ErrorAction SilentlyContinue)) {
     if ($ln -match 'session_stale_relogin|Refresh token expired') {
@@ -313,11 +361,12 @@ if (Test-Path $appLog) {
       }
     }
   }
-  Chk 'Claude 앱 인증' ($bad -eq 0) $(if ($bad -eq 0) { $base + ' 인증 실패 없음' } else { $base + ' 실패 ' + $bad + ' 건 -- 앱에서 재로그인할 것' })
+  Chk 'Claude 앱 인증' ($bad -eq 0) $(if ($bad -eq 0) { $base + ' 인증 실패 없음  (읽은 로그 ' + $appSeen + ')' } else { $base + ' 실패 ' + $bad + ' 건 -- 앱에서 재로그인할 것  (읽은 로그 ' + $appSeen + ')' })
 } elseif (-not $profOk) {
   Chk 'Claude 앱 인증' $true '보류 -- 스케줄러 실행'
 } else {
-  Chk 'Claude 앱 인증' $true '앱 로그 없음 -- 건너뜀'
+  # ★ 프로필이 붙어 있는데 두 자리 다 없다면 경로가 또 옮겨간 것이다. 초록으로 세지 않는다.
+  Chk 'Claude 앱 인증' $false '앱 로그를 두 자리 다 못 찾았다 -- 경로가 옮겨갔는지 볼 것(LOCALAPPDATA\Claude\Logs . APPDATA\Claude\logs)'
 }
 # 9. Claude 앱 자동 시작이 켜져 있는가 (재부팅 내구성)
 #    2026-08-21 23:29 Windows Update(Lenovo 드라이버)가 OS를 재시작했다. 크래시가 아니라
