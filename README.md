@@ -90,4 +90,6 @@ node publish/check-numbers.mjs --vault ../my-notes
 
 혼자 SNS·블로그를 자동으로 굴리면서 겪은 것들입니다. 과정을 [@dhenddl1](https://instagram.com/dhenddl1) 에 적고 있습니다.
 
+게이트 하나하나가 **왜 생겼는지**(어떤 사고가 있었는지)는 블로그에 회차별로 있습니다 — **[티스토리 구축기](https://dhenddl1.tistory.com)** · **[네이버 블로그](https://blog.naver.com/dhenddl1)**
+
 MIT 입니다. 고쳐 쓰셔도 됩니다.
