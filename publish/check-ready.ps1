@@ -126,6 +126,17 @@ foreach ($f in $failed) {
 foreach ($r in $running) {
     "      [..] {0}  {1}  실행 중 -- 36h 안에 시작해서 아직 안 끝났다. 멈춘 것일 수 있으니 볼 것." -f $r.Name, $r.When
 }
+# 3-2. 인스타 config_issue (2026-09-29 신설) -- 「발행은 됐는데 캡션이 빠졌다」는 종료 코드 0 이다.
+#   위 작업 결과 검사로는 영영 안 보인다. publish.mjs 가 로그에 CONFIG_ISSUE 표지를 남기면 여기서 찍는다.
+#   ⛔ 실패로 세지 않는다 -- 이미 게시됐고 재발행은 중복 게시다. 사람이 앱에서 캡션을 본다.
+$ciHits = @(Get-ChildItem (Join-Path $PSScriptRoot 'logs') -Filter '*.log' -ErrorAction SilentlyContinue |
+    Where-Object { $_.LastWriteTime -gt $cut } |
+    Select-String -Pattern 'CONFIG_ISSUE' -SimpleMatch)
+if ($ciHits.Count) {
+    foreach ($h in $ciHits) { "      [!!] config_issue  {0}  -- 발행은 됐지만 캡션·태그가 빠졌을 수 있다. 앱에서 확인 (재발행 금지)" -f $h.Filename }
+} else {
+    "      인스타 config_issue : 최근 36h 로그에 없음"
+}
 
 # 4. 전원 -- 절전에 안 들어가는가 (AC)
 $sleepAc = (powercfg /q SCHEME_CURRENT SUB_SLEEP STANDBYIDLE | Select-String 'AC .*: *0x([0-9a-f]+)').Matches.Groups[1].Value
@@ -433,6 +444,43 @@ if (-not (Test-Path $bsScript)) {
     $bsOut | ForEach-Object { '        ' + $_ }
     '        > 고치기: node pipeline/blog/check-blog-status.mjs --fix'
   }
+}
+
+# ---------------------------------------------------------------------------
+# 11. 릴스가 실제로 인스타에 올라왔나  (2026-09-23 신설 -- 사용자 지시)
+#
+# 릴스는 폰에서 사람이 앱으로 올린다(트렌드 음악 때문에 API 로 못 올린다).
+# 그래서 "걸었다"와 "나갔다" 사이에 검사가 하나도 없었다 -- 사람 눈이 유일한 판정이었다.
+# 연휴가 그걸 드러냈다: 9/25 회차가 조용히 실패하면 9/28 출근까지 아무도 모른다.
+#
+# "앱 예약이 걸렸나"는 API 로 못 본다(2026-09-23 실측, scheduled_posts/drafts 둘 다 400).
+# 그래서 예약이 아니라 결과를 본다 -- 완료는 실제로 쓰이는 자리에서 판정한다.
+#
+# 네트워크를 탄다. 조회 실패/토큰 없음은 판정 보류(exit 0)다.
+# check-blog-url 과 같은 규약 -- "못 물어본 것"과 "없는 것"은 다르다.
+# ---------------------------------------------------------------------------
+$rpOk = $true; $rpMsg = ''
+$rpScript = Join-Path $PSScriptRoot 'check-reel-published.mjs'
+if (-not (Test-Path $rpScript)) {
+  $rpMsg = '검사기 없음 -- ' + $rpScript
+} elseif (-not (Test-Path $pin)) {
+  $rpMsg = '노드 없음 -- 판정 보류'
+} else {
+  $rpOut = & $pin $rpScript 2>&1
+  if ($LASTEXITCODE -eq 0) {
+    $rpHit = $rpOut | Select-String -Pattern '^(✅|⬜) ' | Select-Object -Last 1
+    $rpMsg = if ($rpHit) { $rpHit.ToString().Trim() } else { '이상 없음' }
+  } else {
+    $rpOk = $false
+    # 2026-09-29: 「올라왔는데 캡션·AI 라벨이 원고와 다르다」도 exit 1 이다 -- 요약 줄 둘 다 뽑는다.
+    $rpMsg = (($rpOut | Select-String -Pattern '^⛔ (안 올라온|올라온 릴스 내용 불일치)') -join ' / ')
+    if (-not $rpMsg) { $rpMsg = '검사기가 exit 1 -- 직접 실행해 볼 것' }
+  }
+}
+Chk '릴스 실제 게시·캡션·AI 라벨' $rpOk $rpMsg
+if (-not $rpOk) {
+  $rpOut | Select-String -Pattern '^⛔' | ForEach-Object { '        ' + $_ }
+  '        > 직접 보기: node pipeline/publish/check-reel-published.mjs'
 }
 
 ""
