@@ -129,9 +129,13 @@ foreach ($r in $running) {
 # 3-2. 인스타 config_issue (2026-09-29 신설) -- 「발행은 됐는데 캡션이 빠졌다」는 종료 코드 0 이다.
 #   위 작업 결과 검사로는 영영 안 보인다. publish.mjs 가 로그에 CONFIG_ISSUE 표지를 남기면 여기서 찍는다.
 #   ⛔ 실패로 세지 않는다 -- 이미 게시됐고 재발행은 중복 게시다. 사람이 앱에서 캡션을 본다.
+#   ⛔⛔ 2026-10-01 수정: **자기 로그를 찾고 있었다.** Select-String 은 기본이 대소문자 무시라
+#     이 점검이 check-ready.log 에 남기는 「인스타 config_issue : …없음」 줄에 걸렸다 —
+#     한 번 돌면 다음 날부터 매일 헛경보(9/30 실행이 그 줄을 처음 썼다). 104행과 같은 병이다.
+#   ▶ 표지는 publish.mjs 가 대문자로만 찍는다 → -CaseSensitive · 자기 로그는 뺀다.
 $ciHits = @(Get-ChildItem (Join-Path $PSScriptRoot 'logs') -Filter '*.log' -ErrorAction SilentlyContinue |
-    Where-Object { $_.LastWriteTime -gt $cut } |
-    Select-String -Pattern 'CONFIG_ISSUE' -SimpleMatch)
+    Where-Object { $_.LastWriteTime -gt $cut -and $_.Name -ne 'check-ready.log' } |
+    Select-String -Pattern 'CONFIG_ISSUE' -SimpleMatch -CaseSensitive)
 if ($ciHits.Count) {
     foreach ($h in $ciHits) { "      [!!] config_issue  {0}  -- 발행은 됐지만 캡션·태그가 빠졌을 수 있다. 앱에서 확인 (재발행 금지)" -f $h.Filename }
 } else {

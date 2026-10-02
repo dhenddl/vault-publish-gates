@@ -179,7 +179,7 @@ if (process.argv.includes('--write')) {
     out.push('|---|---|---|---|');
     for (const c of list.slice(0, 40)) {
       const t = c.text.replace(/\|/g, '\\|').slice(0, 130);
-      out.push(`| ${c.numbers.slice(0, 3).join(' · ')} | ${c.markers.join('·')} | 「${c.page}」 | ${t} |`);
+      out.push(`| ${c.numbers.slice(0, 3).join(' · ')} | ${c.markers.join('·')} | [[${c.page}]] | ${t} |`);
     }
     if (list.length > 40) out.push(`\n… 그 외 ${list.length - 40}건 (전량은 \`node pipeline/vault/lint-claims.mjs\`)`);
     out.push('');

@@ -127,7 +127,7 @@ for (const f of wikiFiles) {
     if (KNOWN_FALSE_POSITIVES.aliases.has(t)) continue;
     if (KNOWN_FALSE_POSITIVES.notPages.has(t)) continue;
     // ⛔⛔ 2026-08-28 (10차): **아는 오탐을 「깨짐」에 같이 담지 않는다.**
-    //   종전에는 메모리 링크(`「feedback-*」` 등)와 코드 파일 이름도 `broken` 에 밀어넣어
+    //   종전에는 메모리 링크(`[[feedback-*]]` 등)와 코드 파일 이름도 `broken` 에 밀어넣어
     //   헤더가 **「깨진 링크 18」** 로 찍혔다. 그런데 **진짜 깨진 건 1건**이었고
     //   ★★★ 그 1건이 **0바이트 페이지**였다 — 콜론(`:`)이 든 제목이라 파일명이
     //        확장자까지 잘려 `.md` 가 없었고, 그래서 이 린터의 walk 에도 안 잡혔다.
@@ -148,7 +148,7 @@ const notInIndex = wikiFiles
   .map((f) => path.basename(f, '.md'))
   .filter((n) => !ROOT_EXEMPT.has(n)
     && !/^데일리 브리핑 \d{4}-\d{2}-\d{2}$/.test(n)
-    && !indexText.includes(`「${n}」`));
+    && !indexText.includes(`[[${n}]]`));
 
 // ── 고아 ─────────────────────────────────────────────────────────────
 const orphans = [...inbound].filter(([n, c]) => c === 0 && !ROOT_EXEMPT.has(n)).map(([n]) => n);
@@ -185,11 +185,11 @@ if (notMd.length) {
 }
 if (broken.length) {
   console.log('\n⛔ 깨진 링크 (진짜)');
-  for (const [file, t, why] of broken) console.log(`  ${file} → 「${t}」  (${why})`);
+  for (const [file, t, why] of broken) console.log(`  ${file} → [[${t}]]  (${why})`);
 }
 if (process.argv.includes('--verbose') && known.length) {
   console.log('\n· 아는 오탐 (참고용, 조치 대상 아님)');
-  for (const [file, t, why] of known) console.log(`  ${file} → 「${t}」  (${why})`);
+  for (const [file, t, why] of known) console.log(`  ${file} → [[${t}]]  (${why})`);
 }
 if (orphans.length) {
   console.log('\n⚠️ 고아 페이지');
