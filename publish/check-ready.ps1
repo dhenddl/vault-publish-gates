@@ -487,6 +487,55 @@ if (-not $rpOk) {
   '        > 직접 보기: node pipeline/publish/check-reel-published.mjs'
 }
 
+# 12. 공개 자료가 지금 코드보다 낡지 않았나  (2026-10-02 신설 -- 사용자 지시 "경고로 넣어")
+#
+# check-material-drift 는 자료를 선언한 발행 회차에서만 돈다 -- 배포 회차 **사이의** 공개본은
+# 아무도 안 봤다. 3호 공개본이 9/30 부터 10/02 까지 링크 검사가 깨진 채 받을 수 있었다(lint 12차).
+# 그래서 매일 --public 으로 돌린다. ⛔ 경고만 한다 -- 이상($ng)으로 세지 않는다.
+#   pipeline 에서 자료 파일을 고칠 때마다 재내보내기 전까지 뜨는 게 정상이라,
+#   이상으로 세면 이 점검 전체가 매일 [!!] 가 되고 진짜 이상이 묻힌다(사용자 결정).
+# 네트워크를 탄다. 클론 실패는 그 자료만 "못 물어봤다"로 넘어간다(같은 규약).
+# ---------------------------------------------------------------------------
+$mdScript = Join-Path $PSScriptRoot 'check-material-drift.mjs'
+if ((Test-Path $mdScript) -and (Test-Path $pin)) {
+  $mdOut = & $pin $mdScript --public 2>&1
+  $mdStale = @($mdOut | Select-String -Pattern '^──── .* 자료 (\S+) ' | ForEach-Object { $_.Matches[0].Groups[1].Value })
+  if ($mdStale.Count -eq 0) {
+    "{0}{1,-30} {2}" -f '[OK]  ', '공개 자료 최신', '공개 리포 전부 지금 코드와 같다 (경고 전용 항목)'
+  } else {
+    "{0}{1,-30} {2}" -f '[주의]  ', '공개 자료 최신', ("낡음 {0}곳: {1} -- 막지 않는다. 배포일 전에 재내보내기" -f $mdStale.Count, ($mdStale -join ' · '))
+    '        > 직접 보기: node pipeline/publish/check-material-drift.mjs --public'
+  }
+} else {
+  "{0}{1,-30} {2}" -f '[OK]  ', '공개 자료 최신', '검사기 없음 -- 건너뜀'
+}
+
+# 13. 앞으로 나갈 원고에 마크다운 기호가 없나  (2026-10-04 신설 -- 사용자 지시 "방지책 마련")
+#
+# 9/29~10/04 스레드 본문·답글이 `**굵게**` 를 단 채 나갔다. 스레드는 마크다운을 렌더하지 않는다.
+# 발행 직전 게이트(check-plain-text --only)가 막지만, 그건 발행 시각에야 돈다 --
+# 막히면 그날 글이 안 나간다. 그래서 오늘 이후 회차 전부를 매일 아침 미리 본다.
+# ★ 이상($ng)으로 센다 -- 이대로 두면 그 회차는 게이트에 막혀 안 나간다. 고칠 시간을 버는 자리다.
+# 파일만 본다(오프라인).
+# ---------------------------------------------------------------------------
+$ptOk = $true; $ptMsg = ''
+$ptScript = Join-Path $PSScriptRoot 'check-plain-text.mjs'
+if (-not (Test-Path $ptScript)) {
+  $ptMsg = '검사기 없음 -- ' + $ptScript
+} elseif (-not (Test-Path $pin)) {
+  $ptMsg = '노드 없음 -- 판정 보류'
+} else {
+  $ptOut = & $pin $ptScript --upcoming 2>&1
+  $ptHead = $ptOut | Select-Object -First 1
+  if ($LASTEXITCODE -eq 0) { $ptMsg = "$ptHead".Trim() }
+  else { $ptOk = $false; $ptMsg = "$ptHead".Trim() }
+}
+Chk '앞으로 나갈 원고 마크다운 기호' $ptOk $ptMsg
+if (-not $ptOk) {
+  $ptOut | Select-String -Pattern '^   \d{4}-' | ForEach-Object { '      ' + $_ }
+  '        > 직접 보기: node pipeline/publish/check-plain-text.mjs --upcoming'
+}
+
 ""
 "===================== 결과: OK $ok / 이상 $ng ====================="
 if ($ng -eq 0) { "전부 정상. 로그인 상태 그대로 두고 나가면 된다." }
