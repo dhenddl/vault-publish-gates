@@ -18,6 +18,7 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -57,6 +58,20 @@ const KNOWN_FALSE_POSITIVES = {
 };
 // 볼트 밖(메모리·스킬·코드)을 가리키는 이름 — 8차 규칙: log.md에 쓰지 않는다
 const OUTSIDE_VAULT = /^(vault-|feedback-|infra-|project-|user-)/;
+// ★ 2026-10-12 (13차): 접두어 목록만으로는 새 접두어(`reels-`)를 못 알아봤다 — 같은 원인으로 세 번 깨졌다.
+//   그래서 실제 메모리 폴더(~/.claude/projects/*/memory/*.md)의 파일 이름을 같이 읽는다.
+//   폴더가 없으면(다른 PC·다른 도구) 빈 목록 — 접두어 검사만 남는다.
+const MEMORY_NAMES = (() => {
+  const names = new Set();
+  const root = path.join(homedir(), '.claude', 'projects');
+  if (!existsSync(root)) return names;
+  for (const p of readdirSync(root)) {
+    const dir = path.join(root, p, 'memory');
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir)) if (f.endsWith('.md') && f !== 'MEMORY.md') names.add(f.slice(0, -3));
+  }
+  return names;
+})();
 
 const walk = (dir, ext = null) => {
   const out = [];
@@ -134,7 +149,7 @@ for (const f of wikiFiles) {
     //        index 에는 긴 항목으로 등재돼 있고 log 는 「신설」이라 적었는데 **내용이 0바이트**였다.
     //   ★★ 15시간 동안 아무도 못 봤다. **오탐 16건에 묻혀서**다.
     //   ▶ 규칙: **아는 오탐은 따로 센다.** 사람이 매주 보는 숫자는 「진짜」만이어야 한다.
-    if (OUTSIDE_VAULT.test(t)) { known.push([base, t, '볼트 밖(메모리/스킬)']); continue; }
+    if (OUTSIDE_VAULT.test(t) || MEMORY_NAMES.has(t)) { known.push([base, t, '볼트 밖(메모리/스킬)']); continue; }
     if (/\.(pdf|png|jpg|mjs|js|json|md)$/i.test(t)) { known.push([base, t, '파일 이름']); continue; }
     broken.push([base, t, '대상 없음']);
   }
