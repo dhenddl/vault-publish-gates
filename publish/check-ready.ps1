@@ -536,6 +536,34 @@ if (-not $ptOk) {
   '        > 직접 보기: node pipeline/publish/check-plain-text.mjs --upcoming'
 }
 
+# 14. jaeryo(자료 6호) 미푸시 커밋  (2026-10-15 신설 -- 사용자 결정 ① "간단하게")
+#
+# jaeryo 는 내보내기 산출물이 아니라 저장소 자체라 12번(check-material-drift --public)에 못 넣는다 --
+# 넣으면 빈 내보내기와 대조해 매일 거짓 "최신"이 찍힌다. 그래서 "낡음"은 로컬 main 이 origin/main 보다
+# 앞서 있나(ahead n)로 본다. 2026-10-15 아침에 5커밋이 그 상태였다(공개본을 받는 사람은 origin 을 받는다).
+# ⛔ 경고만 한다 -- 이상($ng)으로 세지 않는다. 네트워크를 탄다(fetch). 실패는 "못 물어봄"으로 찍고
+#    통과시킨다 -- check-blog-url . 12번과 같은 규약. 저장소가 없으면 건너뛴다(남의 기계).
+# ---------------------------------------------------------------------------
+$jaeryoDir = Join-Path $PSScriptRoot '../../jaeryo'
+if (-not (Test-Path (Join-Path $jaeryoDir '.git'))) {
+  "{0}{1,-30} {2}" -f '[OK]  ', 'jaeryo 미푸시 커밋', '저장소 없음 -- 건너뜀'
+} else {
+  $jfOut = (& git -C $jaeryoDir fetch --quiet origin 2>&1) | Out-String
+  if ($LASTEXITCODE -ne 0) {
+    "{0}{1,-30} {2}" -f '[주의]  ', 'jaeryo 미푸시 커밋', ('못 물어봄 -- fetch 실패 (경고 전용 항목): {0}' -f $jfOut.Trim().Split([char]10)[0])
+  } else {
+    [string]$jAhead = (& git -C $jaeryoDir rev-list --count origin/main..HEAD 2>$null)
+    $jAhead = $jAhead.Trim()
+    if ($jAhead -eq '') {
+      "{0}{1,-30} {2}" -f '[주의]  ', 'jaeryo 미푸시 커밋', '못 물어봄 -- origin/main 을 못 읽었다 (경고 전용 항목)'
+    } elseif ($jAhead -eq '0') {
+      "{0}{1,-30} {2}" -f '[OK]  ', 'jaeryo 미푸시 커밋', 'origin/main 과 같다 (경고 전용 항목)'
+    } else {
+      "{0}{1,-30} {2}" -f '[주의]  ', 'jaeryo 미푸시 커밋', ('ahead {0} -- 막지 않는다. 공개본은 origin 이다: git -C jaeryo push' -f $jAhead)
+    }
+  }
+}
+
 ""
 "===================== 결과: OK $ok / 이상 $ng ====================="
 if ($ng -eq 0) { "전부 정상. 로그인 상태 그대로 두고 나가면 된다." }

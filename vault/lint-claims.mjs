@@ -64,6 +64,7 @@ const TARGET = path.join(WIKI, 'topics', '쓰면 안 되는 숫자.md');
 //   대장에 올라와 발행 원고와 겹쳤다 — N건 중 거의 전부 오탐이었다.
 //   주장은 **실제 페이지**에 있고 index 는 그걸 가리키는 목록일 뿐이다.
 const SKIP_FILES = new Set(['log.md', 'lint-report.md', 'index.md', '쓰면 안 되는 숫자.md']);
+const LOG_FILE = /^log(-\d{4}-\d{2})?\.md$/;   // 2026-10-16 log 월별 분할(R6) — 지난달 log-YYYY-MM.md 도 이력이라 뺀다
 
 // ★ 근접 조건 — 숫자가 마커와 **같은 줄에 있다**는 것만으로는 부족하다.
 //   마커는 줄 안의 특정 주장에 붙은 것이고, 같은 줄의 다른 숫자까지 미검증인 건 아니다.
@@ -84,7 +85,7 @@ function walk(dir) {
   for (const e of readdirSync(dir)) {
     const p = path.join(dir, e);
     if (statSync(p).isDirectory()) out.push(...walk(p));
-    else if (e.endsWith('.md') && !SKIP_FILES.has(e)) out.push(p);
+    else if (e.endsWith('.md') && !SKIP_FILES.has(e) && !LOG_FILE.test(e)) out.push(p);
   }
   return out;
 }

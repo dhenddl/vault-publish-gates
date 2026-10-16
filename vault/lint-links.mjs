@@ -85,6 +85,8 @@ const walk = (dir, ext = null) => {
 };
 
 const ROOT_EXEMPT = new Set(['index', 'log', 'lint-report']);
+// 2026-10-16 log 월별 분할(R6) — 지난달 log-YYYY-MM 도 log 와 같은 대우(frontmatter·index·고아·자기참조 면제)
+const isRootExempt = (n) => ROOT_EXEMPT.has(n) || /^log-\d{4}-\d{2}$/.test(n);
 const wikiFiles = walk(WIKI, '.md');
 const rawFiles = walk(RAW, '.md');
 
@@ -126,7 +128,7 @@ for (const f of wikiFiles) {
   const base = path.basename(f);
 
   // index·log·lint-report는 카탈로그/로그 파일이라 frontmatter 규칙 대상이 아니다(7차 확정)
-  if (!raw.startsWith('---') && !ROOT_EXEMPT.has(name)) noFrontmatter.push(name);
+  if (!raw.startsWith('---') && !isRootExempt(name)) noFrontmatter.push(name);
   const upd = raw.match(/^updated:\s*(\d{4}-\d{2}-\d{2})/m);
   staleness.push([name, upd ? upd[1] : '(없음)']);
 
@@ -138,7 +140,7 @@ for (const f of wikiFiles) {
       continue;
     }
     // 오탐 필터
-    if (KNOWN_FALSE_POSITIVES.selfRefFiles.has(base)) continue;
+    if (KNOWN_FALSE_POSITIVES.selfRefFiles.has(base) || /^log-\d{4}-\d{2}\.md$/.test(base)) continue;
     if (KNOWN_FALSE_POSITIVES.aliases.has(t)) continue;
     if (KNOWN_FALSE_POSITIVES.notPages.has(t)) continue;
     // ⛔⛔ 2026-08-28 (10차): **아는 오탐을 「깨짐」에 같이 담지 않는다.**
@@ -161,12 +163,12 @@ const indexText = existsSync(path.join(WIKI, 'index.md')) ? readFileSync(path.jo
 //    25건이 매번 경보로 뜨면 사람이 목록 전체를 무시하게 된다 — 그래서 코드에서 면제한다.
 const notInIndex = wikiFiles
   .map((f) => path.basename(f, '.md'))
-  .filter((n) => !ROOT_EXEMPT.has(n)
+  .filter((n) => !isRootExempt(n)
     && !/^데일리 브리핑 \d{4}-\d{2}-\d{2}$/.test(n)
     && !indexText.includes(`[[${n}]]`));
 
 // ── 고아 ─────────────────────────────────────────────────────────────
-const orphans = [...inbound].filter(([n, c]) => c === 0 && !ROOT_EXEMPT.has(n)).map(([n]) => n);
+const orphans = [...inbound].filter(([n, c]) => c === 0 && !isRootExempt(n)).map(([n]) => n);
 
 // ── 출력 ─────────────────────────────────────────────────────────────
 console.log(`볼트: wiki ${wikiFiles.length}개 · raw-sources ${rawFiles.length}개 · 링크 ${linkTotal}건\n`);
